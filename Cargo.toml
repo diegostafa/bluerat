@@ -1,0 +1,17 @@
+[package]
+name = "bluerat"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+bluer = { version = "0.17.3", features = ["full"] }
+chrono = "0.4.38"
+chrono-humanize = "0.2.3"
+futures = "0.3.31"
+itertools = "0.13.0"
+lazy_static = "1.5.0"
+ratatui = { version = "0.28.1", features = ["crossterm"] }
+ratatui-helpers = { path = "../ratatui-helpers" }
+serde = { version = "1.0.210", features = ["derive"] }
+tokio = { version = "1.40.0", features = ["full"] }
+toml = "0.8.19"
