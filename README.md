@@ -1,3 +1,5 @@
+![demo](./docs/demo/screenshot.png)
+
 ```toml
 # $HOME/.config/bluerat/config.toml
 
@@ -9,5 +11,3 @@ column_spacing = 5
 # [keybinds]
 # cancel = ["todo"]
 ```
-
-![demo](./docs/demo/screenshot.png)

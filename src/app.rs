@@ -29,11 +29,9 @@ pub enum ViewKind {
     Quit,
     AdapterView,
     AdapterActionsView,
-
     DeviceView,
     DeviceActionsView,
     NotificationView,
-
     HelpView,
     StatusView,
 }
@@ -57,7 +55,7 @@ pub enum AppRequest {
 }
 impl AppRequest {
     fn or_else<T: FnOnce() -> Self>(self, other: T) -> Self {
-        if matches!(self, AppRequest::None) {
+        if let AppRequest::None = self {
             return other();
         }
         self
@@ -67,6 +65,7 @@ impl Add for AppRequest {
     type Output = Self;
     fn add(self, other: Self) -> Self {
         match (self.clone(), other.clone()) {
+            (AppRequest::None, req) | (req, AppRequest::None) => req,
             (AppRequest::Chain(mut reqs1), AppRequest::Chain(mut reqs2)) => {
                 reqs1.append(&mut reqs2);
                 AppRequest::Chain(reqs1)
@@ -124,12 +123,12 @@ impl App {
         let mut term = try_init_term()?;
         self.vc.curr().set_title();
         while self.vc.is_running() {
-            term.draw(|f| self.vc.draw(f, f.area()))?;
+            let _ = term.draw(|f| self.vc.draw(f, f.area()))?;
 
-            let req = self.handle_view_event().await
-                + self.poll_session_event().await
-                + self.poll_adapter_event().await
-                + self.poll_device_event().await
+            let req = self.handle_view_event()
+                + self.poll_session().await
+                + self.poll_adapter().await
+                + self.poll_device().await
                 + self.poll_pending_tasks().await;
 
             self.vc.update_status_line();
@@ -138,32 +137,40 @@ impl App {
         try_release_term(term)
     }
 
-    fn app_update(&mut self, ev: &Event) -> AppRequest {
-        match ev {
-            Event::Key(ev) => match self.keymap.get_command(ev) {
-                None => AppRequest::None,
-                Some(cmd) => match cmd {
-                    AppCommand::CloseView => AppRequest::CloseView,
-                    AppCommand::OpenHelpView => AppRequest::OpenHelpView,
-                    AppCommand::RefreshView => AppRequest::RefreshViews,
+    fn handle_view_event(&mut self) -> AppRequest {
+        if let Ok(true) = event::poll(Duration::from_millis(200)) {
+            let ev = &event::read().unwrap();
+            return match ev {
+                Event::Key(ev) => match self.keymap.get_command(ev) {
+                    None => AppRequest::None,
+                    Some(cmd) => match cmd {
+                        AppCommand::CloseView => AppRequest::CloseView,
+                        AppCommand::OpenHelpView => AppRequest::OpenHelpView,
+                        AppCommand::RefreshView => AppRequest::RefreshViews,
+                    },
                 },
-            },
-            _ => AppRequest::None,
-        }
-    }
-    async fn handle_view_event(&mut self) -> AppRequest {
-        match event::poll(Duration::from_millis(200)) {
-            Ok(true) => {
-                let ev = &event::read().unwrap();
-                self.app_update(ev)
-                    .or_else(|| self.vc.curr_mut().update(ev))
+                _ => AppRequest::None,
             }
-            _ => AppRequest::None,
+            .or_else(|| self.vc.curr_mut().update(ev));
         }
+        AppRequest::None
     }
-    async fn poll_session_event(&mut self) -> AppRequest {
-        if let Some(rx) = &self.session_event_rx {
-            return match rx.try_recv() {
+
+    fn monitor_session(&mut self) {
+        let session = self.bt.session.clone();
+        let (sx, rx) = std::sync::mpsc::channel();
+        self.session_event_rx = Some(rx);
+        let _ = tokio::spawn(async move {
+            let mut events = Box::pin(session.events().await.unwrap());
+            while let Some(ev) = events.next().await {
+                sx.send(ev).unwrap();
+            }
+        });
+    }
+    async fn poll_session(&mut self) -> AppRequest {
+        self.session_event_rx
+            .as_ref()
+            .map_or(AppRequest::None, |rx| match rx.try_recv() {
                 Ok(ev) => {
                     match ev {
                         SessionEvent::AdapterAdded(_) => {}
@@ -173,11 +180,26 @@ impl App {
                     AppRequest::RefreshViews
                 }
                 _ => AppRequest::None,
-            };
-        }
-        AppRequest::None
+            })
     }
-    async fn poll_adapter_event(&mut self) -> AppRequest {
+
+    fn monitor_adapter(&mut self, adapter: bluer::Adapter) {
+        let (sx, rx) = std::sync::mpsc::channel();
+        self.adapter_event_rx = Some(rx);
+        let (stop_sx, mut stop_rx) = tokio::sync::oneshot::channel();
+        self.stop_adapter_event_sx = Some(stop_sx);
+
+        let _ = tokio::spawn(async move {
+            let mut events = Box::pin(adapter.discover_devices().await.unwrap());
+            while let Some(ev) = events.next().await {
+                match stop_rx.try_recv() {
+                    Ok(_) | Err(TryRecvError::Closed) => return,
+                    Err(TryRecvError::Empty) => sx.send(ev).unwrap(),
+                }
+            }
+        });
+    }
+    async fn poll_adapter(&mut self) -> AppRequest {
         self.adapter_event_rx
             .as_ref()
             .map_or(AppRequest::None, |rx| match rx.try_recv() {
@@ -195,7 +217,24 @@ impl App {
                 _ => AppRequest::None,
             })
     }
-    async fn poll_device_event(&mut self) -> AppRequest {
+
+    fn monitor_device(&mut self, device: bluer::Device) {
+        let (sx, rx) = std::sync::mpsc::channel();
+        self.device_event_rx = Some(rx);
+        let (stop_sx, mut stop_rx) = tokio::sync::oneshot::channel();
+        self.stop_device_event_sx = Some(stop_sx);
+
+        let _ = tokio::spawn(async move {
+            let mut events = Box::pin(device.events().await.unwrap());
+            while let Some(ev) = events.next().await {
+                match stop_rx.try_recv() {
+                    Ok(_) | Err(TryRecvError::Closed) => return,
+                    Err(TryRecvError::Empty) => sx.send(ev).unwrap(),
+                }
+            }
+        });
+    }
+    async fn poll_device(&mut self) -> AppRequest {
         self.device_event_rx
             .as_ref()
             .map_or(AppRequest::None, |rx| match rx.try_recv() {
@@ -206,6 +245,7 @@ impl App {
                 _ => AppRequest::None,
             })
     }
+
     async fn poll_pending_tasks(&mut self) -> AppRequest {
         let r1 = match self.bt.poll_exec_adapter_action().await {
             TaskStatus::Done(_) => AppRequest::RefreshViews,
@@ -224,50 +264,6 @@ impl App {
             _ => AppRequest::None,
         };
         r1 + r2
-    }
-
-    fn monitor_session(&mut self) {
-        let session = self.bt.session.clone();
-        let (sx, rx) = std::sync::mpsc::channel();
-        self.session_event_rx = Some(rx);
-        tokio::spawn(async move {
-            let mut events = Box::pin(session.events().await.unwrap());
-            while let Some(ev) = events.next().await {
-                sx.send(ev).unwrap();
-            }
-        });
-    }
-    fn monitor_adapter(&mut self, adapter: bluer::Adapter) {
-        let (sx, rx) = std::sync::mpsc::channel();
-        self.adapter_event_rx = Some(rx);
-        let (stop_sx, mut stop_rx) = tokio::sync::oneshot::channel();
-        self.stop_adapter_event_sx = Some(stop_sx);
-
-        tokio::spawn(async move {
-            let mut events = Box::pin(adapter.discover_devices().await.unwrap());
-            while let Some(ev) = events.next().await {
-                match stop_rx.try_recv() {
-                    Ok(_) | Err(TryRecvError::Closed) => return,
-                    Err(TryRecvError::Empty) => sx.send(ev).unwrap(),
-                }
-            }
-        });
-    }
-    fn monitor_device(&mut self, device: bluer::Device) {
-        let (sx, rx) = std::sync::mpsc::channel();
-        self.device_event_rx = Some(rx);
-        let (stop_sx, mut stop_rx) = tokio::sync::oneshot::channel();
-        self.stop_device_event_sx = Some(stop_sx);
-
-        tokio::spawn(async move {
-            let mut events = Box::pin(device.events().await.unwrap());
-            while let Some(ev) = events.next().await {
-                match stop_rx.try_recv() {
-                    Ok(_) | Err(TryRecvError::Closed) => return,
-                    Err(TryRecvError::Empty) => sx.send(ev).unwrap(),
-                }
-            }
-        });
     }
 
     async fn handle_request(&mut self, req: AppRequest) {
@@ -345,10 +341,10 @@ impl App {
                         self.monitor_adapter(adapter);
                     }
                     AdapterAction::SetScanning(false) => {
-                        self.vc.show_status(action.to_string());
                         if let Some(rx) = std::mem::replace(&mut self.stop_adapter_event_sx, None) {
                             rx.send(()).unwrap();
                         }
+                        self.vc.show_status(action.to_string());
                     }
                     _ => {
                         let id = self.vc.show_status_always(action.to_string());
@@ -356,7 +352,8 @@ impl App {
                             let status = self.vc.status().clone();
                             move || status.lock().unwrap().remove(id)
                         };
-                        self.bt
+                        let _ = self
+                            .bt
                             .exec_adapter_action(&adapter.id, action, on_complete)
                             .await;
                     }
@@ -370,13 +367,14 @@ impl App {
                 }
                 if let TaskStatus::Running = self.bt.poll_exec_device_action().await {
                     self.vc
-                        .show_status_always("Another device operation is running".into());
+                        .show_status("Another device operation is running".into());
                     return;
                 }
                 if let DeviceAction::SetConnected(val) = action {
                     let device = self
                         .bt
-                        .get_device(&adapter_id, &device_id)
+                        .get_adapter(&adapter_id)
+                        .and_then(|a| a.get_device(&device_id))
                         .expect("Failed to get device");
                     let msg = match val {
                         true => "Connecting to",
@@ -390,19 +388,19 @@ impl App {
                     let status = self.vc.status().clone();
                     move || status.lock().unwrap().remove(id)
                 };
-                self.bt
+                let _ = self
+                    .bt
                     .exec_device_action(&adapter_id, &device_id, action, finally)
                     .await;
             }
 
             AppRequest::MonitorDevice(adapter_id, device_id) => {
+                self.vc.show_status(format!("{:?}", req));
                 let device = self
                     .bt
                     .get_actual_device(&adapter_id, &device_id)
                     .await
                     .unwrap();
-                self.vc.show_status(format!("{:?}", req));
-
                 self.monitor_device(device);
             }
         }

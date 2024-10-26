@@ -53,7 +53,7 @@ impl View for AdapterView<'_> {
         true
     }
     fn compute_area(&self, area: Rect) -> Rect {
-        let (min_width, min_height) = self.table.size();
+        let (min_width, min_height) = self.table.min_area();
         centered_rect(area, (min_width, min_height))
     }
     fn kind(&self) -> ViewKind {
@@ -198,7 +198,7 @@ impl View for AdapterActionsView<'_> {
         true
     }
     fn compute_area(&self, area: Rect) -> Rect {
-        let (width, height) = self.table.size();
+        let (width, height) = self.table.min_area();
         let (width, height) = (width.min(area.width), height.min(area.height));
         let x = area.width.saturating_sub(width).min(self.pos.x);
         let y = area.height.saturating_sub(height).min(self.pos.y);
@@ -437,7 +437,7 @@ impl View for DeviceActionsView<'_> {
         true
     }
     fn compute_area(&self, area: Rect) -> Rect {
-        let (width, height) = self.table.size();
+        let (width, height) = self.table.min_area();
         let (width, height) = (width.min(area.width), height.min(area.height));
         let x = area.width.saturating_sub(width).min(self.pos.x);
         let y = area.height.saturating_sub(height).min(self.pos.y);

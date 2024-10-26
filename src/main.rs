@@ -1,4 +1,5 @@
 #![feature(let_chains)]
+#![warn(unused_results)]
 
 pub mod app;
 pub mod bt_manager;

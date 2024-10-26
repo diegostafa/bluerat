@@ -1,5 +1,4 @@
 use std::cmp::Ordering;
-use std::collections::HashMap;
 
 use itertools::Itertools;
 use tokio::sync::oneshot::error::TryRecvError;
@@ -16,7 +15,7 @@ pub enum TaskStatus<T> {
 }
 pub struct BtManager {
     pub session: bluer::Session,
-    adapters: HashMap<AdapterId, Adapter>,
+    adapters: Vec<Adapter>,
     adapter_actions_ch: Option<Receiver<Result<AdapterId, bluer::Error>>>,
     device_actions_ch: Option<Receiver<Result<AdapterId, bluer::Error>>>,
 }
@@ -24,7 +23,7 @@ impl BtManager {
     pub async fn new() -> Self {
         Self {
             session: bluer::Session::new().await.unwrap(),
-            adapters: HashMap::new(),
+            adapters: Vec::new(),
             adapter_actions_ch: None,
             device_actions_ch: None,
         }
@@ -39,26 +38,21 @@ impl BtManager {
             .into_iter()
             .map(|a| self.session.adapter(&a).unwrap())
             .collect_vec();
-
         for a in adapters {
-            self.adapters.insert(
-                AdapterId(a.address().await.unwrap()),
-                Adapter::from(a).await,
-            );
+            self.adapters.push(Adapter::from(a).await);
         }
+        self.sort_adapters();
     }
     pub async fn update_adapter(&mut self, adapter_id: &AdapterId) {
-        self.adapters.remove(adapter_id);
+        self.adapters.retain(|a| a.id != *adapter_id);
+
         if let Some(adapter) = self.get_actual_adapter(adapter_id).await {
-            self.adapters.insert(
-                AdapterId(adapter.address().await.unwrap()),
-                Adapter::from(adapter).await,
-            );
+            self.adapters.push(Adapter::from(adapter).await);
         }
     }
 
     pub fn mark_new_device(&mut self, device_id: &DeviceId) {
-        for a in self.adapters.values_mut() {
+        for a in self.adapters.iter_mut() {
             for d in a.devices.iter_mut() {
                 if d.id == *device_id {
                     d.is_new = true;
@@ -68,45 +62,17 @@ impl BtManager {
         }
     }
     pub fn get_adapters(&self, sorter: &Sorter<Adapter>) -> Vec<Adapter> {
-        self.adapters
-            .values()
-            .cloned()
-            .sorted_by(Adapter::BY_ADDRESS.0)
-            .sorted_by(sorter.0)
-            .collect()
+        self.adapters.iter().cloned().sorted_by(sorter.0).collect()
     }
     pub fn get_adapter(&self, adapter_id: &AdapterId) -> Option<&Adapter> {
-        self.adapters.get(adapter_id)
+        self.adapters.iter().find(|a| a.id == *adapter_id)
     }
     pub fn get_adapter_mut(&mut self, adapter_id: &AdapterId) -> Option<&mut Adapter> {
-        self.adapters.get_mut(adapter_id)
+        self.adapters.iter_mut().find(|a| a.id == *adapter_id)
     }
     pub fn get_random_adapter(&self) -> Option<&Adapter> {
-        self.adapters.values().next()
+        self.adapters.first()
     }
-    pub fn get_devices(&self, adapter_id: &AdapterId, sorter: &Sorter<Device>) -> Vec<Device> {
-        self.get_adapter(adapter_id).map_or(Vec::new(), |a| {
-            a.devices
-                .clone()
-                .into_iter()
-                .sorted_by(Device::BY_ADDRESS.0)
-                .sorted_by(sorter.0)
-                .collect()
-        })
-    }
-    pub fn get_device(&self, adapter_id: &AdapterId, device_id: &DeviceId) -> Option<&Device> {
-        self.get_adapter(adapter_id)
-            .and_then(|a| a.get_device(device_id))
-    }
-    pub fn get_device_mut(
-        &mut self,
-        adapter_id: &AdapterId,
-        device_id: &DeviceId,
-    ) -> Option<&mut Device> {
-        self.get_adapter_mut(adapter_id)
-            .and_then(|a| a.get_device_mut(device_id))
-    }
-
     pub async fn get_actual_device(
         &self,
         adapter_id: &AdapterId,
@@ -227,6 +193,13 @@ impl BtManager {
                 }
             },
             None => TaskStatus::None,
+        }
+    }
+
+    fn sort_adapters(&mut self) {
+        self.adapters.sort_by(Adapter::BY_ADDRESS.0);
+        for a in self.adapters.iter_mut() {
+            a.devices.sort_by(Device::BY_ADDRESS.0);
         }
     }
 }

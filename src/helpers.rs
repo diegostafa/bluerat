@@ -3,9 +3,8 @@ use std::io::{self};
 use ratatui::crossterm::event::{DisableMouseCapture, EnableMouseCapture};
 use ratatui::crossterm::terminal::{EnterAlternateScreen, LeaveAlternateScreen};
 use ratatui::crossterm::{self, terminal};
-use ratatui::layout::{Layout, Rect};
+use ratatui::layout::Rect;
 use ratatui::prelude::CrosstermBackend;
-use ratatui::widgets::Widget;
 use ratatui::Terminal;
 
 pub fn try_init_term() -> Result<Terminal<CrosstermBackend<io::Stdout>>, Box<io::Error>> {
@@ -33,12 +32,4 @@ pub fn centered_rect(area: Rect, (width, height): (u16, u16)) -> Rect {
         width,
         height,
     }
-}
-
-pub enum WidgetNode {
-    Leaf(Box<dyn Widget>),
-    Tree {
-        layout: Layout,
-        widgets: Vec<WidgetNode>,
-    },
 }
