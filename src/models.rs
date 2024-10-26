@@ -244,7 +244,7 @@ impl Tabular for Device {
             .unwrap_or_default();
         let flags = [
             (self.is_connected, "Connected"),
-            (self.is_connected, battery.as_str()),
+            (self.battery.is_some(), battery.as_str()),
             (self.is_paired, "Paired"),
             (self.is_blocked, "Blocked"),
             (self.is_trusted, "Trusted"),
