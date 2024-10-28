@@ -499,7 +499,29 @@ impl View for DeviceActionsView<'_> {
     }
 }
 
+enum HelpViewActiveTable {
+    App,
+    Adapter,
+    Device,
+}
+impl HelpViewActiveTable {
+    pub fn prev(&mut self) {
+        match self {
+            Self::App => *self = Self::Device,
+            Self::Adapter => *self = Self::App,
+            Self::Device => *self = Self::Adapter,
+        }
+    }
+    pub fn next(&mut self) {
+        match self {
+            Self::App => *self = Self::Adapter,
+            Self::Adapter => *self = Self::Device,
+            Self::Device => *self = Self::App,
+        }
+    }
+}
 pub struct HelpView<'a> {
+    active_table: HelpViewActiveTable,
     app_table: StatefulTable<'a, ShortCut<AppCommand>>,
     adapter_table: StatefulTable<'a, ShortCut<AdapterViewCommand>>,
     device_table: StatefulTable<'a, ShortCut<DeviceViewCommand>>,
@@ -530,6 +552,7 @@ impl HelpView<'_> {
                     Constraint::Fill(1),
                     Constraint::Fill(1),
                 ]),
+            active_table: HelpViewActiveTable::App,
         }
     }
 }
@@ -541,9 +564,30 @@ impl View for HelpView<'_> {
         ViewKind::HelpView
     }
     fn update(&mut self, ev: &Event) -> Self::Signal {
-        self.adapter_table.update(ev);
-        self.device_table.update(ev);
-        self.app_table.update(ev);
+        match ev {
+            Event::Key(ev) => match ev.code {
+                KeyCode::Left => self.active_table.prev(),
+                KeyCode::Right => self.active_table.next(),
+                _ => {}
+            },
+            Event::Mouse(ev) => {
+                let pos = (ev.row, ev.column);
+                if self.app_table.screen_coords_to_row_index(pos).is_some() {
+                    self.active_table = HelpViewActiveTable::App;
+                } else if self.adapter_table.screen_coords_to_row_index(pos).is_some() {
+                    self.active_table = HelpViewActiveTable::Adapter;
+                } else if self.device_table.screen_coords_to_row_index(pos).is_some() {
+                    self.active_table = HelpViewActiveTable::Device;
+                }
+            }
+            _ => {}
+        }
+        match self.active_table {
+            HelpViewActiveTable::App => self.app_table.update(ev),
+            HelpViewActiveTable::Adapter => self.adapter_table.update(ev),
+            HelpViewActiveTable::Device => self.device_table.update(ev),
+        }
+
         Self::Signal::default()
     }
     fn draw(&mut self, f: &mut Frame<'_>, area: Rect) {
