@@ -55,6 +55,7 @@ impl StyledWidget {
                 .fg(Color::from_str(&CONFIG.theme.fg_normal_color).unwrap())
                 .bg(Color::from_str(&CONFIG.theme.bg_normal_color).unwrap()),
             column_spacing: CONFIG.theme.column_spacing,
+            col_highlight: Style::default(),
         }
     }
 }

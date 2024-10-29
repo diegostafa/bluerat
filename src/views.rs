@@ -5,7 +5,7 @@ use ratatui::layout::{Constraint, Direction, Layout, Position, Rect};
 use ratatui::widgets::{Block, Borders, Paragraph, TableState};
 use ratatui::Frame;
 use ratatui_helpers::keymap::{KeyMap, ShortCut};
-use ratatui_helpers::stateful_table::{IndexedRow, InteractiveTable, StatefulTable};
+use ratatui_helpers::stateful_table::{IndexedRow, StatefulTable};
 use ratatui_helpers::view::View;
 
 use crate::app::{AppRequest, ViewKind};
@@ -133,11 +133,14 @@ impl View for AdapterView<'_> {
                 }
             }
             Event::Mouse(ev) => {
-                let pos = (ev.row, ev.column);
+                let pos = Position {
+                    x: ev.column,
+                    y: ev.row,
+                };
                 match ev.kind {
                     MouseEventKind::Down(MouseButton::Left) => {
                         if let Some(row) = self.table.screen_coords_to_row_index(pos)
-                            && let Some(idx) = self.table.selected_index()
+                            && let Some(idx) = self.table.selected_row()
                             && row == idx
                             && let Some(adapter) = self.table.selected_value()
                         {
@@ -147,13 +150,13 @@ impl View for AdapterView<'_> {
                     }
                     MouseEventKind::Down(MouseButton::Right) => {
                         if let Some(row) = self.table.screen_coords_to_row_index(pos)
-                            && let Some(idx) = self.table.selected_index()
+                            && let Some(idx) = self.table.selected_row()
                             && row == idx
                             && let Some(adapter) = self.table.selected_value()
                         {
                             return AppRequest::OpenAdapterActionsViewAt(
                                 adapter.clone(),
-                                (pos.1, pos.0 + 1).into(),
+                                (pos.x, pos.y + 1).into(),
                             );
                         }
                     }
@@ -226,11 +229,14 @@ impl View for AdapterActionsView<'_> {
                 _ => {}
             },
             Event::Mouse(ev) => {
-                let pos = (ev.row, ev.column);
+                let pos = Position {
+                    x: ev.column,
+                    y: ev.row,
+                };
 
                 match ev.kind {
                     MouseEventKind::Down(MouseButton::Left | MouseButton::Right) => {
-                        if !self.area.contains(Position { x: pos.1, y: pos.0 }) {
+                        if !self.area.contains(pos) {
                             return AppRequest::CloseView;
                         }
 
@@ -378,18 +384,21 @@ impl View for DeviceView<'_> {
                 }
             }
             Event::Mouse(ev) => {
-                let pos = (ev.row, ev.column);
+                let pos = Position {
+                    x: ev.column,
+                    y: ev.row,
+                };
                 match ev.kind {
                     MouseEventKind::Down(MouseButton::Right) => {
                         if let Some(row) = self.table.screen_coords_to_row_index(pos)
-                            && let Some(idx) = self.table.selected_index()
+                            && let Some(idx) = self.table.selected_row()
                             && row == idx
                             && let Some(device) = self.table.selected_value()
                         {
                             return AppRequest::OpenDeviceActionsViewAt(
                                 self.adapter.clone(),
                                 device.id,
-                                (pos.1, pos.0 + 1).into(),
+                                (pos.x, pos.y + 1).into(),
                             );
                         }
                     }
@@ -471,11 +480,14 @@ impl View for DeviceActionsView<'_> {
                 _ => {}
             },
             Event::Mouse(ev) => {
-                let pos = (ev.row, ev.column);
+                let pos = Position {
+                    x: ev.column,
+                    y: ev.row,
+                };
 
                 match ev.kind {
                     MouseEventKind::Down(MouseButton::Left | MouseButton::Right) => {
-                        if !self.area.contains(Position { x: pos.1, y: pos.0 }) {
+                        if !self.area.contains(pos) {
                             return AppRequest::CloseView;
                         }
 
@@ -571,7 +583,10 @@ impl View for HelpView<'_> {
                 _ => {}
             },
             Event::Mouse(ev) => {
-                let pos = (ev.row, ev.column);
+                let pos = Position {
+                    x: ev.column,
+                    y: ev.row,
+                };
                 if self.app_table.screen_coords_to_row_index(pos).is_some() {
                     self.active_table = HelpViewActiveTable::App;
                 } else if self.adapter_table.screen_coords_to_row_index(pos).is_some() {
