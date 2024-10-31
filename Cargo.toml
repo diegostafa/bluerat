@@ -11,7 +11,7 @@ futures = "0.3.31"
 itertools = "0.13.0"
 lazy_static = "1.5.0"
 ratatui = { version = "0.29.0", features = ["crossterm"] }
-ratatui-helpers = { path = "../ratatui-helpers" }
+ratatui-helpers = { git = "https://github.com/diegostafa/ratatui-helpers.git" }
 serde = { version = "1.0.210", features = ["derive"] }
 tokio = { version = "1.40.0", features = ["full"] }
 toml = "0.8.19"

@@ -88,6 +88,11 @@ impl Adapter {
 }
 impl Tabular for Adapter {
     type Value = Self;
+    type ColumnValue = ();
+    fn column_values() -> Vec<Self::ColumnValue> {
+        vec![]
+    }
+
     fn value(&self) -> Self::Value {
         self.clone()
     }
@@ -181,6 +186,10 @@ impl Display for AdapterAction {
 }
 impl Tabular for AdapterAction {
     type Value = Self;
+    type ColumnValue = ();
+    fn column_values() -> Vec<Self::ColumnValue> {
+        vec![]
+    }
     fn value(&self) -> Self::Value {
         *self
     }
@@ -234,6 +243,10 @@ impl Device {
 }
 impl Tabular for Device {
     type Value = Self;
+    type ColumnValue = ();
+    fn column_values() -> Vec<Self::ColumnValue> {
+        vec![]
+    }
     fn value(&self) -> Self::Value {
         self.clone()
     }
@@ -327,6 +340,10 @@ impl Display for DeviceAction {
 }
 impl Tabular for DeviceAction {
     type Value = Self;
+    type ColumnValue = ();
+    fn column_values() -> Vec<Self::ColumnValue> {
+        vec![]
+    }
     fn value(&self) -> Self::Value {
         *self
     }

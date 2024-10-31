@@ -865,6 +865,7 @@ dependencies = [
 [[package]]
 name = "ratatui-helpers"
 version = "0.1.0"
+source = "git+https://github.com/diegostafa/ratatui-helpers.git#52eab6efdd62f1bd94b09a0200b53e4420f0ce92"
 dependencies = [
  "directories",
  "itertools 0.13.0",
