@@ -18,17 +18,6 @@ use crate::keymaps::{
 use crate::models::{Adapter, AdapterAction, Device, DeviceAction, DeviceId};
 use crate::theme::StyledWidget;
 
-pub struct QuitView;
-impl View for QuitView {
-    type Model = BtManager;
-    type Signal = AppRequest;
-    type Kind = ViewKind;
-    fn kind(&self) -> ViewKind {
-        ViewKind::Quit
-    }
-    fn set_title(&self) {}
-}
-
 pub struct AdapterView<'a> {
     table: StatefulTable<'a, Adapter>,
     keymap: AdapterViewKeyMap,

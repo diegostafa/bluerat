@@ -21,7 +21,7 @@ use crate::helpers::{try_init_term, try_release_term};
 use crate::keymaps::{AppCommand, AppKeyMap};
 use crate::models::{Adapter, AdapterAction, AdapterId, DeviceAction, DeviceId};
 use crate::views::{
-    AdapterActionsView, AdapterView, DeviceActionsView, DeviceView, HelpView, PopupView, QuitView,
+    AdapterActionsView, AdapterView, DeviceActionsView, DeviceView, HelpView, PopupView,
 };
 
 #[derive(PartialEq)]
@@ -98,7 +98,7 @@ impl App {
     pub async fn new() -> Self {
         Self {
             bt: BtManager::new().await,
-            vc: ViewController::new(Box::new(QuitView), Duration::from_secs(3)),
+            vc: ViewController::new(Duration::from_secs(3)),
             keymap: KeyMap::default(),
             session_event_rx: Default::default(),
             adapter_event_rx: Default::default(),
